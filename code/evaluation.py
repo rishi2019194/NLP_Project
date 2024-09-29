@@ -187,7 +187,7 @@ if __name__ == "__main__":
         predictions_dir = args.predictions_dir
         if args.predictions_dir[-1]!="/":
             predictions_dir = args.predictions_dir + "/"
-        for prediction_file in glob(predictions_dir + "*.json"): 
+        for prediction_file in sorted(glob(predictions_dir + "*.json")):
             print()
             print(f"Evaluating {prediction_file}...")
             parse_file(args.gold_file, prediction_file) 

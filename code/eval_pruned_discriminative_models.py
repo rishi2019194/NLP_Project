@@ -178,6 +178,11 @@ class BiasEvaluator():
             model = nn.DataParallel(model)
         self.model.eval()
 
+        # You can use this code to check the model layerrs 
+        # for name, param in self.model.named_parameters():
+        #     print(f"Layer: {name}, Size: {param.size()}, req grad: {param.requires_grad}")
+
+        
         # print(self.model.bert.encoder.layer[layer_num].attention.self.query.weight.data[:,0:64])
         # print(self.model.bert.encoder.layer[layer_num].attention.self.key.weight.data[:,0:64])
         # print(self.model.bert.encoder.layer[layer_num].attention.self.value.weight.data[:,0:64])
