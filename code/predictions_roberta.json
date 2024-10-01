@@ -1,0 +1,42 @@
+{
+  "roberta-base": {
+    "intrasentence": {
+      "gender": {
+        "Count": 765.0,
+        "LM Score": 71.58331346592215,
+        "SS Score": 53.32413045891307,
+        "ICAT Score": 66.82426801308227
+      },
+      "profession": {
+        "Count": 2430.0,
+        "LM Score": 72.9555667049922,
+        "SS Score": 55.38093832398334,
+        "ICAT Score": 65.10417860837589
+      },
+      "race": {
+        "Count": 2886.0,
+        "LM Score": 70.29900474875332,
+        "SS Score": 56.76173662269526,
+        "ICAT Score": 60.79213764977985
+      },
+      "religion": {
+        "Count": 237.0,
+        "LM Score": 72.98850574712644,
+        "SS Score": 44.45977011494253,
+        "ICAT Score": 64.90104373100806
+      },
+      "overall": {
+        "Count": 2106.0,
+        "LM Score": 71.57252941779097,
+        "SS Score": 55.33507953253782,
+        "ICAT Score": 63.93562668201462
+      }
+    },
+    "overall": {
+      "Count": 2106.0,
+      "LM Score": 71.57252941779097,
+      "SS Score": 55.33507953253782,
+      "ICAT Score": 63.93562668201462
+    }
+  }
+}

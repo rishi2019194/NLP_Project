@@ -29,13 +29,13 @@ class ScoreEvaluator(object):
         """
         # cluster ID, gold_label to sentence ID
         stereoset = dataloader.StereoSet(gold_file_path) 
-        self.intersentence_examples = stereoset.get_intersentence_examples() 
+        # self.intersentence_examples = stereoset.get_intersentence_examples() 
         self.intrasentence_examples = stereoset.get_intrasentence_examples() 
         self.id2term = {}
         self.id2gold = {}
         self.id2score = {}
         self.example2sent = {}
-        self.domain2example = {"intersentence": defaultdict(lambda: []), 
+        self.domain2example = {#"intersentence": defaultdict(lambda: []), 
                                "intrasentence": defaultdict(lambda: [])}
 
         with open(predictions_file_path) as f:
@@ -48,25 +48,27 @@ class ScoreEvaluator(object):
                 self.example2sent[(example.ID, sentence.gold_label)] = sentence.ID
                 self.domain2example['intrasentence'][example.bias_type].append(example)
 
-        for example in self.intersentence_examples:
-            for sentence in example.sentences:
-                self.id2term[sentence.ID] = example.target
-                self.id2gold[sentence.ID] = sentence.gold_label
-                self.example2sent[(example.ID, sentence.gold_label)] = sentence.ID
-                self.domain2example['intersentence'][example.bias_type].append(example)
+        # for example in self.intersentence_examples:
+        #     for sentence in example.sentences:
+        #         self.id2term[sentence.ID] = example.target
+        #         self.id2gold[sentence.ID] = sentence.gold_label
+        #         self.example2sent[(example.ID, sentence.gold_label)] = sentence.ID
+        #         self.domain2example['intersentence'][example.bias_type].append(example)
 
         for sent in self.predictions.get('intrasentence', []) + self.predictions.get('intersentence', []):
             self.id2score[sent['id']] = sent['score']
 
         results = defaultdict(lambda: {})
 
-        for split in ['intrasentence', 'intersentence']:
+        # for split in ['intrasentence', 'intersentence']:
+        for split in ['intrasentence']:
             for domain in ['gender', 'profession', 'race', 'religion']:
                 results[split][domain] = self.evaluate(self.domain2example[split][domain])
 
-        results['intersentence']['overall'] = self.evaluate(self.intersentence_examples) 
+        # results['intersentence']['overall'] = self.evaluate(self.intersentence_examples) 
         results['intrasentence']['overall'] = self.evaluate(self.intrasentence_examples) 
-        results['overall'] = self.evaluate(self.intersentence_examples + self.intrasentence_examples)
+        # results['overall'] = self.evaluate(self.intersentence_examples + self.intrasentence_examples)
+        results['overall'] = self.evaluate(self.intrasentence_examples)
         self.results = results
 
     def get_overall_results(self):
