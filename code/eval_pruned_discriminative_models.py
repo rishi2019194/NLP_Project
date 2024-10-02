@@ -135,9 +135,9 @@ class BiasEvaluator():
         """
         # Access the layer's attention parameters
         if(intrasentence):
-            layer = self.model.bert.encoder.layer[layer_num]
+            layer = self.model.roberta.encoder.layer[layer_num]
         else:
-            layer = self.model.module.bert.encoder.layer[layer_num]
+            layer = self.model.module.roberta.encoder.layer[layer_num]
         attention = layer.attention.self
         
         # Access the query, key, and value weights & biases
