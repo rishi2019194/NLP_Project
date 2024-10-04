@@ -6,6 +6,9 @@ from argparse import ArgumentParser
 from collections import defaultdict
 import numpy as np
 import dataloader
+import re
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 def parse_args():
     parser = ArgumentParser()
@@ -153,7 +156,7 @@ def parse_file(gold_file, predictions_file):
     score_evaluator = ScoreEvaluator(
         gold_file_path=gold_file, predictions_file_path=predictions_file)
     overall = score_evaluator.get_overall_results()
-    score_evaluator.pretty_print(overall)
+    # score_evaluator.pretty_print(overall)
 
     if args.output_file:
         output_file = args.output_file
@@ -170,6 +173,7 @@ def parse_file(gold_file, predictions_file):
             d = json.load(f)
     else:
         d = {}
+    return overall
 
     # assuming the file follows a format of "predictions_{MODELNAME}.json"
     predictions_filename = os.path.basename(predictions_file)
@@ -189,9 +193,104 @@ if __name__ == "__main__":
         predictions_dir = args.predictions_dir
         if args.predictions_dir[-1]!="/":
             predictions_dir = args.predictions_dir + "/"
-        for prediction_file in sorted(glob(predictions_dir + "*.json")):
-            print()
+
+        # Function to extract layer and head from filename
+        def extract_layer_head(filename):
+            # Adjust regex to match your file structure
+            match = re.search(r'_(\d+)_(\d+)\.json$', filename)
+            if match:
+                layer = int(match.group(1))
+                head = int(match.group(2))
+                return layer, head
+            return None
+
+        # Sort the prediction files by layer and head numerically, placing None values at the end
+        prediction_files = sorted(glob(predictions_dir + "*.json"), key=lambda f: extract_layer_head(f) or (float('inf'), float('inf')))
+
+        # Initialize matrices for SS Score and ICAT Score for both gender and race
+        lm_scores_gender = np.zeros((12,12))
+        ss_scores_gender = np.zeros((12, 12))
+        icat_scores_gender = np.zeros((12, 12))
+        lm_scores_race = np.zeros((12,12))
+        ss_scores_race = np.zeros((12, 12))
+        icat_scores_race = np.zeros((12, 12))
+
+        # Initialize matrices to store the base results for LM,SS, CAT scores
+        base_lm_scores_gender = np.zeros((12, 12))
+        base_ss_scores_gender = np.zeros((12, 12))
+        base_icat_scores_gender = np.zeros((12, 12))
+
+        base_lm_scores_race = np.zeros((12, 12))
+        base_ss_scores_race = np.zeros((12, 12))
+        base_icat_scores_race = np.zeros((12, 12))
+
+        # Process base file (the last file)
+        base_results = parse_file(args.gold_file, prediction_files[-1])
+        for i in range(12):
+            for j in range(12):
+                # Extract base SS and ICAT scores for gender and race
+                base_lm_scores_gender[i, j] = base_results['intrasentence']['gender']['LM Score']
+                base_lm_scores_race[i, j] = base_results['intrasentence']['race']['LM Score']
+
+                # Extract base SS and ICAT scores for gender and race
+                base_ss_scores_gender[i, j] = base_results['intrasentence']['gender']['SS Score']
+                base_icat_scores_gender[i, j] = base_results['intrasentence']['gender']['ICAT Score']
+                base_ss_scores_race[i, j] = base_results['intrasentence']['race']['SS Score']
+                base_icat_scores_race[i, j] = base_results['intrasentence']['race']['ICAT Score']
+
+        # Now process each file and compare to base scores
+        for i, prediction_file in enumerate(prediction_files[:-1]):
             print(f"Evaluating {prediction_file}...")
-            parse_file(args.gold_file, prediction_file) 
+            
+            # Parse the results from the current file
+            results = parse_file(args.gold_file, prediction_file)
+            
+            # Assuming prediction_file corresponds to specific layer, head
+            layer, head = extract_layer_head(prediction_file)
+
+            # Update matrices with LM scores for gender and race
+            lm_scores_gender[layer, head] = results['intrasentence']['gender']['LM Score']
+            lm_scores_race[layer, head] = results['intrasentence']['race']['LM Score']
+            
+            # Only update SS and ICAT if LM score is greater than base
+            if lm_scores_gender[layer, head] > base_lm_scores_gender[layer, head]:
+                ss_scores_gender[layer, head] = results['intrasentence']['gender']['SS Score']
+                icat_scores_gender[layer, head] = results['intrasentence']['gender']['ICAT Score']
+            if lm_scores_race[layer, head] > base_lm_scores_race[layer, head]:
+                ss_scores_race[layer, head] = results['intrasentence']['race']['SS Score']
+                icat_scores_race[layer, head] = results['intrasentence']['race']['ICAT Score']
+
+        # Function to create heatmap for SS and ICAT
+        def create_heatmap_for_metric(scores, base_scores, title, filename):
+            comparison_matrix = np.zeros((12, 12))
+
+            for i in range(12):
+                for j in range(12):
+                    if scores[i, j] < base_scores[i, j]:
+                        comparison_matrix[i, j] = 0  # Black if less than base
+                    else:
+                        diff = scores[i, j] - base_scores[i, j]
+                        comparison_matrix[i, j] = min(1, diff / np.max(scores - base_scores))  # Yellow to red
+
+            # Create heatmap
+            plt.figure(figsize=(8, 6))
+            s = sns.heatmap(comparison_matrix, cmap="YlOrRd", cbar=True)
+            s.set_xlabel('Head Number -->', fontsize=10)
+            s.set_ylabel('Layer Number -->', fontsize=10)
+            plt.tight_layout()
+            # plt.title(title)
+            # Save the heatmap as a PNG file
+            plt.savefig(filename, format='png', dpi=300)
+            # plt.close()  # Close the plot to free memory
+
+        # Create heatmaps for gender and race for LM Score SS Score and ICAT Score
+        create_heatmap_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "bert/LM_score_gender.png")
+        create_heatmap_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "bert/SS_score_gender.png")
+        create_heatmap_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "bert/ICAT_score_gender.png")
+
+        create_heatmap_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "bert/LM_score_race.png")
+        create_heatmap_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "bert/SS_score_race.png")
+        create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "bert/ICAT_score_race.png")
+
     else:
         parse_file(args.gold_file, args.predictions_file) 
