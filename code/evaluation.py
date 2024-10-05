@@ -252,25 +252,34 @@ if __name__ == "__main__":
             lm_scores_gender[layer, head] = results['intrasentence']['gender']['LM Score']
             lm_scores_race[layer, head] = results['intrasentence']['race']['LM Score']
             
-            # Only update SS and ICAT if LM score is greater than base
-            if lm_scores_gender[layer, head] > base_lm_scores_gender[layer, head]:
-                ss_scores_gender[layer, head] = results['intrasentence']['gender']['SS Score']
-                icat_scores_gender[layer, head] = results['intrasentence']['gender']['ICAT Score']
-            if lm_scores_race[layer, head] > base_lm_scores_race[layer, head]:
-                ss_scores_race[layer, head] = results['intrasentence']['race']['SS Score']
-                icat_scores_race[layer, head] = results['intrasentence']['race']['ICAT Score']
+            ss_scores_gender[layer, head] = results['intrasentence']['gender']['SS Score']
+            icat_scores_gender[layer, head] = results['intrasentence']['gender']['ICAT Score']
+            ss_scores_race[layer, head] = results['intrasentence']['race']['SS Score']
+            icat_scores_race[layer, head] = results['intrasentence']['race']['ICAT Score']
 
         # Function to create heatmap for SS and ICAT
-        def create_heatmap_for_metric(scores, base_scores, title, filename):
+        def create_heatmap_for_metric(scores, base_scores, title, filename, ss_check = False):
             comparison_matrix = np.zeros((12, 12))
 
-            for i in range(12):
-                for j in range(12):
-                    if scores[i, j] < base_scores[i, j]:
-                        comparison_matrix[i, j] = 0  # Black if less than base
-                    else:
-                        diff = scores[i, j] - base_scores[i, j]
-                        comparison_matrix[i, j] = min(1, diff / np.max(scores - base_scores))  # Yellow to red
+            if(ss_check):
+                for i in range(12):
+                    for j in range(12):
+                        if scores[i, j] > base_scores[i, j]:
+                            comparison_matrix[i, j] = 0  # Black if greater than base
+                        else:
+                            diff = base_scores[i, j] - scores[i, j]
+                            comparison_matrix[i, j] = min(1, diff / np.max(base_scores - scores))  # Yellow to red
+
+                        # print(comparison_matrix[i, j], diff, np.max(base_scores - scores), diff / np.max(base_scores - scores))
+
+            else:
+                for i in range(12):
+                    for j in range(12):
+                        if scores[i, j] < base_scores[i, j]:
+                            comparison_matrix[i, j] = 0  # Black if less than base
+                        else:
+                            diff = scores[i, j] - base_scores[i, j]
+                            comparison_matrix[i, j] = min(1,diff / np.max(scores - base_scores))  # Yellow to red
 
             # Create heatmap
             plt.figure(figsize=(8, 6))
@@ -284,13 +293,13 @@ if __name__ == "__main__":
             # plt.close()  # Close the plot to free memory
 
         # Create heatmaps for gender and race for LM Score SS Score and ICAT Score
-        create_heatmap_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "bert/LM_score_gender.png")
-        create_heatmap_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "bert/SS_score_gender.png")
-        create_heatmap_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "bert/ICAT_score_gender.png")
+        # create_heatmap_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "bert/LM_score_gender.png")
+        create_heatmap_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender.png", ss_check=True)
+        # create_heatmap_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "bert/ICAT_score_gender.png")
 
-        create_heatmap_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "bert/LM_score_race.png")
-        create_heatmap_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "bert/SS_score_race.png")
-        create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "bert/ICAT_score_race.png")
+        create_heatmap_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race.png")
+        create_heatmap_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race.png", ss_check=True)
+        create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race.png")
 
     else:
         parse_file(args.gold_file, args.predictions_file) 

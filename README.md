@@ -1,5 +1,5 @@
 # Libraries to Install -
-numpy, torch, transformers, colorama, joblib, scikit-learn
+numpy, torch, transformers, colorama, joblib, scikit-learn, matplotlib, seaborn
 
 # Code to run -
 
