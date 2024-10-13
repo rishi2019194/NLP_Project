@@ -16,6 +16,8 @@ def parse_args():
     parser.add_argument("--predictions-file", default=None)
     parser.add_argument("--predictions-dir", default=None)
     parser.add_argument("--output-file", default=None)
+    parser.add_argument("--head_pruning", default = False, action="store_true")
+    parser.add_argument("--all_heads_pruning", default = False, action="store_true")
     return parser.parse_args()
 
 class ScoreEvaluator(object):
@@ -204,102 +206,215 @@ if __name__ == "__main__":
                 return layer, head
             return None
 
-        # Sort the prediction files by layer and head numerically, placing None values at the end
-        prediction_files = sorted(glob(predictions_dir + "*.json"), key=lambda f: extract_layer_head(f) or (float('inf'), float('inf')))
+        def extract_pruning_index(filename):
+            """
+            Extracts the index from filenames ending with '_allheadspruning_<index>.json'.
+            """
+            match = re.search(r'_allheadspruning_(\d+)\.json$', filename)
+            if match:
+                return int(match.group(1))
+            return float('inf') 
+        
+        if(args.head_pruning):
 
-        # Initialize matrices for SS Score and ICAT Score for both gender and race
-        lm_scores_gender = np.zeros((12,12))
-        ss_scores_gender = np.zeros((12, 12))
-        icat_scores_gender = np.zeros((12, 12))
-        lm_scores_race = np.zeros((12,12))
-        ss_scores_race = np.zeros((12, 12))
-        icat_scores_race = np.zeros((12, 12))
+            # Sort the prediction files by layer and head numerically, placing None values at the end
+            prediction_files = sorted(glob(predictions_dir + "*.json"), key=lambda f: extract_layer_head(f) or (float('inf'), float('inf')))
 
-        # Initialize matrices to store the base results for LM,SS, CAT scores
-        base_lm_scores_gender = np.zeros((12, 12))
-        base_ss_scores_gender = np.zeros((12, 12))
-        base_icat_scores_gender = np.zeros((12, 12))
+            # Initialize matrices for SS Score and ICAT Score for both gender and race
+            lm_scores_gender = np.zeros((12,12))
+            ss_scores_gender = np.zeros((12, 12))
+            icat_scores_gender = np.zeros((12, 12))
+            lm_scores_race = np.zeros((12,12))
+            ss_scores_race = np.zeros((12, 12))
+            icat_scores_race = np.zeros((12, 12))
 
-        base_lm_scores_race = np.zeros((12, 12))
-        base_ss_scores_race = np.zeros((12, 12))
-        base_icat_scores_race = np.zeros((12, 12))
+            # Initialize matrices to store the base results for LM,SS, CAT scores
+            base_lm_scores_gender = np.zeros((12, 12))
+            base_ss_scores_gender = np.zeros((12, 12))
+            base_icat_scores_gender = np.zeros((12, 12))
 
-        # Process base file (the last file)
-        base_results = parse_file(args.gold_file, prediction_files[-1])
-        for i in range(12):
-            for j in range(12):
+            base_lm_scores_race = np.zeros((12, 12))
+            base_ss_scores_race = np.zeros((12, 12))
+            base_icat_scores_race = np.zeros((12, 12))
+
+            # Process base file (the last file)
+            base_results = parse_file(args.gold_file, prediction_files[-1])
+            for i in range(12):
+                for j in range(12):
+                    # Extract base SS and ICAT scores for gender and race
+                    base_lm_scores_gender[i, j] = base_results['intrasentence']['gender']['LM Score']
+                    base_lm_scores_race[i, j] = base_results['intrasentence']['race']['LM Score']
+
+                    # Extract base SS and ICAT scores for gender and race
+                    base_ss_scores_gender[i, j] = base_results['intrasentence']['gender']['SS Score']
+                    base_icat_scores_gender[i, j] = base_results['intrasentence']['gender']['ICAT Score']
+                    base_ss_scores_race[i, j] = base_results['intrasentence']['race']['SS Score']
+                    base_icat_scores_race[i, j] = base_results['intrasentence']['race']['ICAT Score']
+
+            # Now process each file and compare to base scores
+            for i, prediction_file in enumerate(prediction_files[:144]):
+                print(f"Evaluating {prediction_file}...")
+                
+                # Parse the results from the current file
+                results = parse_file(args.gold_file, prediction_file)
+                
+                # Assuming prediction_file corresponds to specific layer, head
+                layer, head = extract_layer_head(prediction_file)
+
+                # Update matrices with LM scores for gender and race
+                lm_scores_gender[layer, head] = results['intrasentence']['gender']['LM Score']
+                lm_scores_race[layer, head] = results['intrasentence']['race']['LM Score']
+                
+                ss_scores_gender[layer, head] = results['intrasentence']['gender']['SS Score']
+                icat_scores_gender[layer, head] = results['intrasentence']['gender']['ICAT Score']
+                ss_scores_race[layer, head] = results['intrasentence']['race']['SS Score']
+                icat_scores_race[layer, head] = results['intrasentence']['race']['ICAT Score']
+
+            # Function to create heatmap for SS and ICAT
+            def create_heatmap_for_metric(scores, base_scores, title, filename, ss_check = False):
+                comparison_matrix = np.zeros((12, 12))
+
+                if(ss_check):
+                    for i in range(12):
+                        for j in range(12):
+                            if scores[i, j] > base_scores[i, j]:
+                                comparison_matrix[i, j] = 0  # Black if greater than base
+                            else:
+                                diff = base_scores[i, j] - scores[i, j]
+                                comparison_matrix[i, j] = min(1, diff / np.max(base_scores - scores))  # Yellow to red
+
+                            # print(comparison_matrix[i, j], diff, np.max(base_scores - scores), diff / np.max(base_scores - scores))
+
+                else:
+                    for i in range(12):
+                        for j in range(12):
+                            if scores[i, j] < base_scores[i, j]:
+                                comparison_matrix[i, j] = 0  # Black if less than base
+                            else:
+                                diff = scores[i, j] - base_scores[i, j]
+                                comparison_matrix[i, j] = min(1,diff / np.max(scores - base_scores))  # Yellow to red
+
+                # Create heatmap
+                plt.figure(figsize=(8, 6))
+                s = sns.heatmap(comparison_matrix, cmap="YlOrRd", cbar=True)
+                s.set_xlabel('Head Number -->', fontsize=10)
+                s.set_ylabel('Layer Number -->', fontsize=10)
+                plt.tight_layout()
+                # Save the heatmap as a PNG file
+                plt.savefig(filename, format='png', dpi=300)
+                plt.close()  # Close the plot to free memory
+
+
+            # Create heatmaps for gender and race for LM Score SS Score and ICAT Score
+            create_heatmap_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "bert/LM_score_gender.png")
+            create_heatmap_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "bert/SS_score_gender.png", ss_check=True)
+            create_heatmap_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "bert/ICAT_score_gender.png")
+
+            create_heatmap_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "bert/LM_score_race.png")
+            create_heatmap_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "bert/SS_score_race.png", ss_check=True)
+            create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "bert/ICAT_score_race.png")
+
+
+        elif(args.all_heads_pruning):
+    
+            # Function to create heatmap for SS and ICAT
+            def create_heatmap_allheads_for_metric(scores, base_scores, title, filename, ss_check = False):
+                comparison_matrix = np.zeros((1, 12))
+
+                if(ss_check):
+                    for i in range(1):
+                        for j in range(12):
+                            if scores[i, j] > base_scores[i, j]:
+                                comparison_matrix[i, j] = 0  # Black if greater than base
+                            else:
+                                diff = base_scores[i, j] - scores[i, j]
+                                comparison_matrix[i, j] = min(1, diff / np.max(base_scores - scores))  # Yellow to red
+
+                            # print(comparison_matrix[i, j], diff, np.max(base_scores - scores), diff / np.max(base_scores - scores))
+
+                else:
+                    for i in range(1):
+                        for j in range(12):
+                            if scores[i, j] < base_scores[i, j]:
+                                comparison_matrix[i, j] = 0  # Black if less than base
+                            else:
+                                diff = scores[i, j] - base_scores[i, j]
+                                comparison_matrix[i, j] = min(1,diff / np.max(scores - base_scores))  # Yellow to red
+
+                # Create heatmap
+                plt.figure(figsize=(8, 6))
+                s = sns.heatmap(comparison_matrix, cmap="YlOrRd", cbar=True)
+                s.set_xlabel('Head Number -->', fontsize=10)
+                s.set_ylabel('Layer Number -->', fontsize=10)
+                plt.tight_layout()
+                # Save the heatmap as a PNG file
+                plt.savefig(filename, format='png', dpi=300)
+                plt.close()  # Close the plot to free memory
+
+
+            # sort based on layer_names
+            prediction_files = sorted(glob(os.path.join(predictions_dir, '*_allheadspruning_*.json')),key=extract_pruning_index)
+            prediction_files.append('predictions_bert/predictions_bert-base-cased_BertNextSentence_BertLM.json')
+
+            # Initialize vectors for SS Score and ICAT Score for both gender and race (for pruning)
+            lm_scores_gender = np.zeros((12,12))
+            ss_scores_gender = np.zeros((12, 12))
+            icat_scores_gender = np.zeros((12, 12))
+            lm_scores_race = np.zeros((12,12))
+            ss_scores_race = np.zeros((12, 12))
+            icat_scores_race = np.zeros((12, 12))
+
+            # Initialize vectors to store the base results for LM,SS, CAT scores (without pruning)
+            base_lm_scores_gender = np.zeros((1, 12))
+            base_ss_scores_gender = np.zeros((1, 12))
+            base_icat_scores_gender = np.zeros((1, 12))
+
+            base_lm_scores_race = np.zeros((1, 12))
+            base_ss_scores_race = np.zeros((1, 12))
+            base_icat_scores_race = np.zeros((1, 12))
+
+            # Process base file (the last file)
+            base_results = parse_file(args.gold_file, prediction_files[-1])
+            for i in range(12):
                 # Extract base SS and ICAT scores for gender and race
-                base_lm_scores_gender[i, j] = base_results['intrasentence']['gender']['LM Score']
-                base_lm_scores_race[i, j] = base_results['intrasentence']['race']['LM Score']
+                base_lm_scores_gender[0, i] = base_results['intrasentence']['gender']['LM Score']
+                base_lm_scores_race[0, i] = base_results['intrasentence']['race']['LM Score']
 
                 # Extract base SS and ICAT scores for gender and race
-                base_ss_scores_gender[i, j] = base_results['intrasentence']['gender']['SS Score']
-                base_icat_scores_gender[i, j] = base_results['intrasentence']['gender']['ICAT Score']
-                base_ss_scores_race[i, j] = base_results['intrasentence']['race']['SS Score']
-                base_icat_scores_race[i, j] = base_results['intrasentence']['race']['ICAT Score']
+                base_ss_scores_gender[0, i] = base_results['intrasentence']['gender']['SS Score']
+                base_icat_scores_gender[0, i] = base_results['intrasentence']['gender']['ICAT Score']
+                base_ss_scores_race[0, i] = base_results['intrasentence']['race']['SS Score']
+                base_icat_scores_race[0, i] = base_results['intrasentence']['race']['ICAT Score']
 
-        # Now process each file and compare to base scores
-        for i, prediction_file in enumerate(prediction_files[:-1]):
-            print(f"Evaluating {prediction_file}...")
+            # Now process each file and compare to base scores
+            layer = 0
+            for i, prediction_file in enumerate(prediction_files[:-1]):
+                print(f"Evaluating {prediction_file}...")
+                
+                # Parse the results from the current file
+                results = parse_file(args.gold_file, prediction_file)
+                
+
+                # Update matrices with LM scores for gender and race
+                lm_scores_gender[0, layer] = results['intrasentence']['gender']['LM Score']
+                lm_scores_race[0, layer] = results['intrasentence']['race']['LM Score']
+                
+                ss_scores_gender[0, layer] = results['intrasentence']['gender']['SS Score']
+                icat_scores_gender[0, layer] = results['intrasentence']['gender']['ICAT Score']
+                ss_scores_race[0, layer] = results['intrasentence']['race']['SS Score']
+                icat_scores_race[0, layer] = results['intrasentence']['race']['ICAT Score']
             
-            # Parse the results from the current file
-            results = parse_file(args.gold_file, prediction_file)
-            
-            # Assuming prediction_file corresponds to specific layer, head
-            layer, head = extract_layer_head(prediction_file)
+                layer += 1
+    
+            create_heatmap_allheads_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_gender_allheads.png")
+            create_heatmap_allheads_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender_allheads.png", ss_check=True)
+            create_heatmap_allheads_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "roberta/ICAT_score_gender_allheads.png")
 
-            # Update matrices with LM scores for gender and race
-            lm_scores_gender[layer, head] = results['intrasentence']['gender']['LM Score']
-            lm_scores_race[layer, head] = results['intrasentence']['race']['LM Score']
-            
-            ss_scores_gender[layer, head] = results['intrasentence']['gender']['SS Score']
-            icat_scores_gender[layer, head] = results['intrasentence']['gender']['ICAT Score']
-            ss_scores_race[layer, head] = results['intrasentence']['race']['SS Score']
-            icat_scores_race[layer, head] = results['intrasentence']['race']['ICAT Score']
+            create_heatmap_allheads_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race_allheads.png")
+            create_heatmap_allheads_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race_allheads.png", ss_check=True)
+            create_heatmap_allheads_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race_allheads.png")
 
-        # Function to create heatmap for SS and ICAT
-        def create_heatmap_for_metric(scores, base_scores, title, filename, ss_check = False):
-            comparison_matrix = np.zeros((12, 12))
 
-            if(ss_check):
-                for i in range(12):
-                    for j in range(12):
-                        if scores[i, j] > base_scores[i, j]:
-                            comparison_matrix[i, j] = 0  # Black if greater than base
-                        else:
-                            diff = base_scores[i, j] - scores[i, j]
-                            comparison_matrix[i, j] = min(1, diff / np.max(base_scores - scores))  # Yellow to red
-
-                        # print(comparison_matrix[i, j], diff, np.max(base_scores - scores), diff / np.max(base_scores - scores))
-
-            else:
-                for i in range(12):
-                    for j in range(12):
-                        if scores[i, j] < base_scores[i, j]:
-                            comparison_matrix[i, j] = 0  # Black if less than base
-                        else:
-                            diff = scores[i, j] - base_scores[i, j]
-                            comparison_matrix[i, j] = min(1,diff / np.max(scores - base_scores))  # Yellow to red
-
-            # Create heatmap
-            plt.figure(figsize=(8, 6))
-            s = sns.heatmap(comparison_matrix, cmap="YlOrRd", cbar=True)
-            s.set_xlabel('Head Number -->', fontsize=10)
-            s.set_ylabel('Layer Number -->', fontsize=10)
-            plt.tight_layout()
-            # plt.title(title)
-            # Save the heatmap as a PNG file
-            plt.savefig(filename, format='png', dpi=300)
-            # plt.close()  # Close the plot to free memory
-
-        # Create heatmaps for gender and race for LM Score SS Score and ICAT Score
-        # create_heatmap_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "bert/LM_score_gender.png")
-        create_heatmap_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender.png", ss_check=True)
-        # create_heatmap_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "bert/ICAT_score_gender.png")
-
-        create_heatmap_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race.png")
-        create_heatmap_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race.png", ss_check=True)
-        create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race.png")
 
     else:
         parse_file(args.gold_file, args.predictions_file) 

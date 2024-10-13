@@ -42,6 +42,16 @@ def parse_args():
     parser.add_argument('--do_pruning', default=False, 
                         help = "carry out model pruning", 
                         action="store_true")
+    parser.add_argument('--head_pruning', default=False, 
+                        help = "carry out head pruning", 
+                        action="store_true")
+    parser.add_argument('--all_heads_pruning', default=False, 
+                        help = "carry out all heads pruning", 
+                        action="store_true")
+    parser.add_argument('--layer_pruning', default=False, 
+                        help = "carry out layer pruning", 
+                        action="store_true")
+    parser.add_argument('--model_name', default='bert', type = str)
     parser.add_argument("--skip-intrasentence", help="Skip intrasentence evaluation.",
                         default=False, action="store_true")
     parser.add_argument("--intrasentence-model", type=str, default='BertLM', choices=[
@@ -70,7 +80,8 @@ class BiasEvaluator():
                  intersentence_model="BertNextSentence", tokenizer="BertTokenizer",
                  intersentence_load_path=None, intrasentence_load_path=None, skip_intrasentence=False,
                  skip_intersentence=False, batch_size=1, max_seq_length=128, 
-                 output_dir="predictions/", output_file="predictions.json", do_pruning=False):
+                 output_dir="predictions/", output_file="predictions.json", do_pruning=False, head_pruning=False, 
+                 all_heads_pruning=False, layer_pruning=False, model_name = "bert"):
         print(f"Loading {input_file}...")
         filename = os.path.abspath(input_file)
         self.dataloader = dataloader.StereoSet(filename)
@@ -107,6 +118,10 @@ class BiasEvaluator():
         self.INTERSENTENCE_MODEL = intersentence_model
 
         self.do_pruning = do_pruning
+        self.head_pruning = head_pruning
+        self.all_heads_pruning = all_heads_pruning
+        self.layer_pruning = layer_pruning
+        self.model_name = model_name
 
         print("---------------------------------------------------------------")
         print(
@@ -127,19 +142,26 @@ class BiasEvaluator():
         print("---------------------------------------------------------------")
 
 
-    def zero_out_attention_weights(self, layer_num, head_num, intrasentence = True):
+    def zero_out_attention_weights(self, layer_num, head_num, intrasentence=True):
         """
-        Zero out the weights of a specific attention head in a given layer.
+        Zero out the weights of specific attention head(s) in a given layer.
+        
         layer_num: The encoder layer number (0-indexed)
-        head_num: The attention head number (0-indexed)
+        head_num: Either the attention head number (0-indexed) or "all_heads"
         """
         # Access the layer's attention parameters
-        if(intrasentence):
-            layer = self.model.roberta.encoder.layer[layer_num]
-        else:
-            layer = self.model.module.roberta.encoder.layer[layer_num]
+        if(self.model_name == 'bert'):
+            if intrasentence:
+                layer = self.model.bert.encoder.layer[layer_num]
+            else:
+                layer = self.model.module.bert.encoder.layer[layer_num]
+        elif(self.model_name == 'roberta'):
+            if intrasentence:
+                layer = self.model.roberta.encoder.layer[layer_num]
+            else:
+                layer = self.model.module.roberta.encoder.layer[layer_num]
         attention = layer.attention.self
-        
+
         # Access the query, key, and value weights & biases
         query_weight = attention.query.weight.data
         key_weight = attention.key.weight.data
@@ -148,25 +170,37 @@ class BiasEvaluator():
         query_bias = attention.query.bias.data
         key_bias = attention.key.bias.data
         value_bias = attention.value.bias.data
-        
+
         # Get the number of heads and the size of each head
         num_heads = attention.num_attention_heads
         head_dim = attention.attention_head_size
-        
-        # Calculate the weight index for the specified head
-        start_index = head_num * head_dim
-        end_index = start_index + head_dim
-        
-        # Zero out the weights & biases for the specified attention head
-        query_weight[:, start_index:end_index] = 0
-        key_weight[:, start_index:end_index] = 0
-        value_weight[:, start_index:end_index] = 0
 
-        query_bias[start_index:end_index] = 0
-        key_bias[start_index:end_index] = 0
-        value_bias[start_index:end_index] = 0
-        
-        print(f"Zeroed out attention weights & biases for layer {layer_num}, head {head_num}")
+        if head_num == "all_heads":
+            # Zero out all heads
+            query_weight[:, :] = 0
+            key_weight[:, :] = 0
+            value_weight[:, :] = 0
+
+            query_bias[:] = 0
+            key_bias[:] = 0
+            value_bias[:] = 0
+            
+            print(f"Zeroed out all attention heads for layer {layer_num}")
+        else:
+            # Zero out a specific head
+            start_index = head_num * head_dim
+            end_index = start_index + head_dim
+
+            query_weight[:, start_index:end_index] = 0
+            key_weight[:, start_index:end_index] = 0
+            value_weight[:, start_index:end_index] = 0
+
+            query_bias[start_index:end_index] = 0
+            key_bias[start_index:end_index] = 0
+            value_bias[start_index:end_index] = 0
+
+            print(f"Zeroed out attention weights & biases for layer {layer_num}, head {head_num}")
+
 
 
     def evaluate_intrasentence(self, layer_num=None, head_num=None):
@@ -353,17 +387,48 @@ if __name__ == "__main__":
     # carry out pruning
     else:
 
-        for layer_num in range(12):
-            for head_num in range(12):
+        if(args.head_pruning):
+            for layer_num in range(12):
+                for head_num in range(12):
+                    evaluator = BiasEvaluator(**vars(args))
+                    results = evaluator.evaluate(layer_num, head_num)
+                    if args.output_file is not None:
+                        output_file = args.output_file
+                    else:
+                        output_file = f"predictions_{args.pretrained_class}_{args.intersentence_model}_{args.intrasentence_model}_headpruning_{layer_num}_{head_num}.json"
+
+                    output_file = os.path.join(args.output_dir, output_file)
+                    with open(output_file, "w+") as f:
+                        json.dump(results, f, indent=2)
+
+        elif(args.all_heads_pruning):
+
+            for layer_num in range(12):
+
                 evaluator = BiasEvaluator(**vars(args))
-                results = evaluator.evaluate(layer_num, head_num)
+                results = evaluator.evaluate(layer_num, "all_heads")
                 if args.output_file is not None:
                     output_file = args.output_file
                 else:
-                    output_file = f"predictions_{args.pretrained_class}_{args.intersentence_model}_{args.intrasentence_model}_{layer_num}_{head_num}.json"
+                    output_file = f"predictions_{args.pretrained_class}_{args.intersentence_model}_{args.intrasentence_model}_allheadspruning_{layer_num}.json"
 
                 output_file = os.path.join(args.output_dir, output_file)
                 with open(output_file, "w+") as f:
                     json.dump(results, f, indent=2)
 
 
+        elif(args.layer_pruning):
+
+            for layer_num in range(12):
+
+                evaluator = BiasEvaluator(**vars(args))
+                results = evaluator.evaluate(layer_num, "full_layer")
+                if args.output_file is not None:
+                    output_file = args.output_file
+                else:
+                    output_file = f"predictions_{args.pretrained_class}_{args.intersentence_model}_{args.intrasentence_model}_layerpruning_{layer_num}.json"
+
+                output_file = os.path.join(args.output_dir, output_file)
+                with open(output_file, "w+") as f:
+                    json.dump(results, f, indent=2)
+        
