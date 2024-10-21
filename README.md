@@ -13,7 +13,9 @@ python3 eval_discriminative_models.py --pretrained-class bert-base-cased --token
 
 cd code/
 
-python3 eval_pruned_discriminative_models.py --pretrained-class bert-base-cased --tokenizer BertTokenizer --intrasentence-model BertLM --intersentence-model BertNextSentence --input-file ../data/dev.json --output-dir predictions/ --do_pruning
+python3 eval_pruned_discriminative_models.py --pretrained-class bert-base-cased --tokenizer BertTokenizer --intrasentence-model BertLM --skip-intersentence --input-file ../data/dev.json --output-dir predictions/ --do_pruning --layer_pruning
+
+python3 eval_pruned_discriminative_models.py --pretrained-class roberta-base --tokenizer RobertaTokenizer --intrasentence-model RoBERTaLM --skip-intersentence --input-file ../data/dev.json --output-dir predictions_roberta/ --do_pruning --layer_pruning --model_name roberta
 
 ## Command for Computing LMS, SS, CAT scores 
 

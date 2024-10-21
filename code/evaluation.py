@@ -18,7 +18,7 @@ def parse_args():
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--head_pruning", default = False, action="store_true")
     parser.add_argument("--all_heads_pruning", default = False, action="store_true")
-    parser.add_argument("--all_layer_pruning", default = False, action="store_true")
+    parser.add_argument("--layer_pruning", default = False, action="store_true")
     return parser.parse_args()
 
 class ScoreEvaluator(object):
@@ -419,7 +419,7 @@ if __name__ == "__main__":
                 create_heatmap_allheads_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race_allheads.png", ss_check=True)
                 create_heatmap_allheads_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race_allheads.png")
 
-            elif(args.all_layer_pruning):
+            elif(args.layer_pruning):
                 create_heatmap_allheads_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_gender_layer.png")
                 create_heatmap_allheads_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender_layer.png", ss_check=True)
                 create_heatmap_allheads_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "roberta/ICAT_score_gender_layer.png")

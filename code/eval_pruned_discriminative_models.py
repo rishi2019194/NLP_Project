@@ -143,11 +143,11 @@ class BiasEvaluator():
         
     def prune_layer(self, layer_num, intrasentence=True):
         """
-        Prunes out a complete encoder layer by zeroing out its weights and biases.
+        Prunes out a complete BERT encoder layer by zeroing out its weights and biases.
         
         layer_num: The encoder layer number (0-indexed)
         """
-        # Access the layer's parameters based on the model type
+        # Access the layer based on the model type
         if self.model_name == 'bert':
             if intrasentence:
                 layer = self.model.bert.encoder.layer[layer_num]
@@ -159,27 +159,30 @@ class BiasEvaluator():
             else:
                 layer = self.model.module.roberta.encoder.layer[layer_num]
 
-        # Zero out attention weights & biases
-        attention = layer.attention.self
-        attention.query.weight.data[:] = 0
-        attention.key.weight.data[:] = 0
-        attention.value.weight.data[:] = 0
-        attention.query.bias.data[:] = 0
-        attention.key.bias.data[:] = 0
-        attention.value.bias.data[:] = 0
-        
-        # Zero out the output dense layer
+        # Zero out attention weights and biases
+        layer.attention.self.query.weight.data[:] = 0
+        layer.attention.self.query.bias.data[:] = 0
+        layer.attention.self.key.weight.data[:] = 0
+        layer.attention.self.key.bias.data[:] = 0
+        layer.attention.self.value.weight.data[:] = 0
+        layer.attention.self.value.bias.data[:] = 0
+
+        # Zero out attention output weights, biases, and LayerNorm
         layer.attention.output.dense.weight.data[:] = 0
         layer.attention.output.dense.bias.data[:] = 0
+        layer.attention.output.LayerNorm.weight.data[:] = 0
+        layer.attention.output.LayerNorm.bias.data[:] = 0
 
-        # Zero out intermediate layer (feed-forward network) weights & biases
+        # Zero out intermediate dense layer weights and biases
         layer.intermediate.dense.weight.data[:] = 0
         layer.intermediate.dense.bias.data[:] = 0
-        
-        # Zero out the output dense layer after intermediate
+
+        # Zero out output dense layer weights, biases, and LayerNorm
         layer.output.dense.weight.data[:] = 0
         layer.output.dense.bias.data[:] = 0
-        
+        layer.output.LayerNorm.weight.data[:] = 0
+        layer.output.LayerNorm.bias.data[:] = 0
+
         print(f"Zeroed out all weights and biases for layer {layer_num}")
 
 
@@ -268,6 +271,10 @@ class BiasEvaluator():
 
         if(self.do_pruning):
             if(self.layer_pruning):
+                # for name, param in self.model.named_parameters():
+                #     print(f"Layer: {name}, Size: {param.size()}, req grad: {param.requires_grad}")
+                
+                # exit()
                 self.prune_layer(layer_num)
             else:
                 self.zero_out_attention_weights(layer_num, head_num)
@@ -288,14 +295,15 @@ class BiasEvaluator():
         loader = DataLoader(dataset, batch_size=self.batch_size)
         word_probabilities = defaultdict(list)
 
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.query.weight.data[:,0:64])
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.key.weight.data[:,0:64])
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.value.weight.data[:,0:64])
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.query.weight.data)
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.key.weight.data)
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.value.weight.data)
 
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.query.bias.data[0:64])
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.key.bias.data[0:64])
-        # print(self.model.bert.encoder.layer[layer_num].attention.self.value.bias.data[0:64])
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.query.bias.data)
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.key.bias.data)
+        # print(self.model.bert.encoder.layer[layer_num].attention.self.value.bias.data)
 
+        # exit()
 
         # calculate the logits for each prediction
         for sentence_id, next_token, input_ids, attention_mask, token_type_ids in tqdm(loader, total=len(loader)):
@@ -415,6 +423,7 @@ def process_job(batch, model, pretrained_class):
 if __name__ == "__main__":
     args = parse_args()
 
+    print(args.do_pruning, args.head_pruning, args.all_heads_pruning, args.layer_pruning)
     # no pruning 
     if(args.do_pruning == False):
         evaluator = BiasEvaluator(**vars(args))
