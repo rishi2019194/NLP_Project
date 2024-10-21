@@ -140,6 +140,47 @@ class BiasEvaluator():
             f"{Fore.LIGHTCYAN_EX}Intersentence Model:{Style.RESET_ALL} {self.INTERSENTENCE_MODEL}")
         print(f"{Fore.LIGHTCYAN_EX}CUDA:{Style.RESET_ALL} {self.cuda}")
         print("---------------------------------------------------------------")
+        
+    def prune_layer(self, layer_num, intrasentence=True):
+        """
+        Prunes out a complete encoder layer by zeroing out its weights and biases.
+        
+        layer_num: The encoder layer number (0-indexed)
+        """
+        # Access the layer's parameters based on the model type
+        if self.model_name == 'bert':
+            if intrasentence:
+                layer = self.model.bert.encoder.layer[layer_num]
+            else:
+                layer = self.model.module.bert.encoder.layer[layer_num]
+        elif self.model_name == 'roberta':
+            if intrasentence:
+                layer = self.model.roberta.encoder.layer[layer_num]
+            else:
+                layer = self.model.module.roberta.encoder.layer[layer_num]
+
+        # Zero out attention weights & biases
+        attention = layer.attention.self
+        attention.query.weight.data[:] = 0
+        attention.key.weight.data[:] = 0
+        attention.value.weight.data[:] = 0
+        attention.query.bias.data[:] = 0
+        attention.key.bias.data[:] = 0
+        attention.value.bias.data[:] = 0
+        
+        # Zero out the output dense layer
+        layer.attention.output.dense.weight.data[:] = 0
+        layer.attention.output.dense.bias.data[:] = 0
+
+        # Zero out intermediate layer (feed-forward network) weights & biases
+        layer.intermediate.dense.weight.data[:] = 0
+        layer.intermediate.dense.bias.data[:] = 0
+        
+        # Zero out the output dense layer after intermediate
+        layer.output.dense.weight.data[:] = 0
+        layer.output.dense.bias.data[:] = 0
+        
+        print(f"Zeroed out all weights and biases for layer {layer_num}")
 
 
     def zero_out_attention_weights(self, layer_num, head_num, intrasentence=True):
@@ -226,7 +267,10 @@ class BiasEvaluator():
         # print(self.model.bert.encoder.layer[layer_num].attention.self.value.bias.data[0:64])
 
         if(self.do_pruning):
-            self.zero_out_attention_weights(layer_num, head_num)
+            if(self.layer_pruning):
+                self.prune_layer(layer_num)
+            else:
+                self.zero_out_attention_weights(layer_num, head_num)
 
         print()
         print(

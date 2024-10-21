@@ -18,6 +18,7 @@ def parse_args():
     parser.add_argument("--output-file", default=None)
     parser.add_argument("--head_pruning", default = False, action="store_true")
     parser.add_argument("--all_heads_pruning", default = False, action="store_true")
+    parser.add_argument("--all_layer_pruning", default = False, action="store_true")
     return parser.parse_args()
 
 class ScoreEvaluator(object):
@@ -315,7 +316,7 @@ if __name__ == "__main__":
             create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "bert/ICAT_score_race.png")
 
 
-        elif(args.all_heads_pruning):
+        elif(args.all_heads_pruning or args.all_layer_pruning):
     
             # Function to create heatmap for SS and ICAT
             def create_heatmap_allheads_for_metric(scores, base_scores, title, filename, ss_check = False):
@@ -353,7 +354,10 @@ if __name__ == "__main__":
 
 
             # sort based on layer_names
-            prediction_files = sorted(glob(os.path.join(predictions_dir, '*_allheadspruning_*.json')),key=extract_pruning_index)
+            if(args.all_heads_pruning):
+                prediction_files = sorted(glob(os.path.join(predictions_dir, '*_allheadspruning_*.json')),key=extract_pruning_index)
+            elif(args.all_layer_pruning):
+                prediction_files = sorted(glob(os.path.join(predictions_dir, '*_layerpruning_*.json')),key=extract_pruning_index)
             prediction_files.append('predictions_bert/predictions_bert-base-cased_BertNextSentence_BertLM.json')
 
             # Initialize vectors for SS Score and ICAT Score for both gender and race (for pruning)
@@ -405,15 +409,24 @@ if __name__ == "__main__":
                 icat_scores_race[0, layer] = results['intrasentence']['race']['ICAT Score']
             
                 layer += 1
-    
-            create_heatmap_allheads_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_gender_allheads.png")
-            create_heatmap_allheads_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender_allheads.png", ss_check=True)
-            create_heatmap_allheads_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "roberta/ICAT_score_gender_allheads.png")
+            
+            if(args.all_heads_pruning):
+                create_heatmap_allheads_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_gender_allheads.png")
+                create_heatmap_allheads_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender_allheads.png", ss_check=True)
+                create_heatmap_allheads_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "roberta/ICAT_score_gender_allheads.png")
 
-            create_heatmap_allheads_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race_allheads.png")
-            create_heatmap_allheads_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race_allheads.png", ss_check=True)
-            create_heatmap_allheads_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race_allheads.png")
+                create_heatmap_allheads_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race_allheads.png")
+                create_heatmap_allheads_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race_allheads.png", ss_check=True)
+                create_heatmap_allheads_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race_allheads.png")
 
+            elif(args.all_layer_pruning):
+                create_heatmap_allheads_for_metric(lm_scores_gender, base_lm_scores_gender, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_gender_layer.png")
+                create_heatmap_allheads_for_metric(ss_scores_gender, base_ss_scores_gender, 'Heatmap of SS Scores (Gender)', "roberta/SS_score_gender_layer.png", ss_check=True)
+                create_heatmap_allheads_for_metric(icat_scores_gender, base_icat_scores_gender, 'Heatmap of ICAT Scores (Gender)', "roberta/ICAT_score_gender_layer.png")
+
+                create_heatmap_allheads_for_metric(lm_scores_race, base_lm_scores_race, 'Heatmap of LM Scores (Gender)', "roberta/LM_score_race_layer.png")
+                create_heatmap_allheads_for_metric(ss_scores_race, base_ss_scores_race, 'Heatmap of SS Scores (Race)', "roberta/SS_score_race_layer.png", ss_check=True)
+                create_heatmap_allheads_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "roberta/ICAT_score_race_layer.png")
 
 
     else:
