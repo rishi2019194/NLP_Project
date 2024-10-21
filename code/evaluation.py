@@ -316,7 +316,7 @@ if __name__ == "__main__":
             create_heatmap_for_metric(icat_scores_race, base_icat_scores_race, 'Heatmap of ICAT Scores (Race)', "bert/ICAT_score_race.png")
 
 
-        elif(args.all_heads_pruning or args.all_layer_pruning):
+        elif(args.all_heads_pruning or args.layer_pruning):
     
             # Function to create heatmap for SS and ICAT
             def create_heatmap_allheads_for_metric(scores, base_scores, title, filename, ss_check = False):
@@ -356,9 +356,9 @@ if __name__ == "__main__":
             # sort based on layer_names
             if(args.all_heads_pruning):
                 prediction_files = sorted(glob(os.path.join(predictions_dir, '*_allheadspruning_*.json')),key=extract_pruning_index)
-            elif(args.all_layer_pruning):
+            elif(args.layer_pruning):
                 prediction_files = sorted(glob(os.path.join(predictions_dir, '*_layerpruning_*.json')),key=extract_pruning_index)
-            prediction_files.append('predictions_bert/predictions_bert-base-cased_BertNextSentence_BertLM.json')
+            prediction_files.append('predictions_roberta/predictions_roberta-base_BertNextSentence_RoBERTaLM.json')
 
             # Initialize vectors for SS Score and ICAT Score for both gender and race (for pruning)
             lm_scores_gender = np.zeros((12,12))

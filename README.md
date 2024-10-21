@@ -21,5 +21,5 @@ python3 eval_pruned_discriminative_models.py --pretrained-class roberta-base --t
 
 cd code/
 
-python3 evaluation.py --gold-file ../data/dev.json --predictions-dir predictions/
+python3 evaluation.py --gold-file ../data/dev.json --predictions-dir predictions_bert/
 
